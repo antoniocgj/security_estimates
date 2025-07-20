@@ -53,7 +53,14 @@ class RunLatticeEstimator:
     return result
     
   def primal_meet_estimator(self, p):
-    return primal_may(p, t=PrimalMeetLWE_params.T)
+    try:
+      t_ini = time.process_time()
+      result = primal_may(p, t=PrimalMeetLWE_params.T)
+      t_end = time.process_time()
+      result.update({"exec_time": (t_end - t_ini)})
+    except Exception as e:
+      result = {"primal_may":"fail", "exception": e}
+    return result
   
   def sparse_LWE_Estimator_dual(self, p):
     try:
