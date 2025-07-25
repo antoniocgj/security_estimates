@@ -50,37 +50,41 @@ class RunLatticeEstimator:
                                                         deny_list=["arora-gb"])
     except Exception as e:
       raise e
-    return result
+    return {"tool": "lattice-estimator" , "result": result}
     
   def primal_meet_estimator(self, p):
+    t_ini = time.process_time()
     try:
-      t_ini = time.process_time()
-      result = primal_may(p, t=PrimalMeetLWE_params.T)
+      est = primal_may(p, t=PrimalMeetLWE_params.T)
       t_end = time.process_time()
-      result.update({"exec_time": (t_end - t_ini)})
+      result = {"attack": "primal", "estimate": est, "exec_time": (t_end - t_ini)}
     except Exception as e:
-      result = {"primal_may":"fail", "exception": e}
-    return result
+      t_end = time.process_time()
+      result = {"attack": "primal", "estimate": "fail", "exception": e, "exec_time": (t_end - t_ini)}
+    return {"tool": "primal-meet-estimator", "result": result}
+
   
   def sparse_LWE_Estimator_dual(self, p):
+    t_ini = time.process_time()
     try:
-      t_ini = time.process_time()
       sec_dual = SparseLWEestimator_hybrid_dual(**p)
       t_end = time.process_time()
-      sec_dual.update({"exec_time": (t_end - t_ini)})
+      result = {"attack": "dual", "estimate": sec_dual, "exec_time": (t_end - t_ini)}
     except Exception as e:
-      sec_dual = {"sec_dual":"fail", "exception": e}
-    return sec_dual
+      t_end = time.process_time()
+      result = {"attack": "dual", "estimate": "fail", "exception": e, "exec_time": (t_end - t_ini)}
+    return {"tool": "sparse-lwe-estimator", "result": result}
 
   def sparse_LWE_Estimator_primal(self, p):
+    t_ini = time.process_time()
     try:
-      t_ini = time.process_time()
       sec_primal = SparseLWEestimator_hybrid_primal(**p)
       t_end = time.process_time()
-      sec_primal.update({"exec_time": (t_end - t_ini)})
+      result = {"attack": "primal", "estimate": sec_primal, "exec_time": (t_end - t_ini)}
     except Exception as e:
-      sec_primal = {"sec_primal":"fail", "exception": e}
-    return sec_primal
+      t_end = time.process_time()
+      result = {"attack": "primal", "estimate": "fail", "exception": e, "exec_time": (t_end - t_ini)}
+    return {"tool": "sparse-lwe-estimator", "result": result}
   
   def run_all(self):
     exec = ProcessPoolExecutor(max_workers=self.threads)
@@ -88,7 +92,7 @@ class RunLatticeEstimator:
     tasks.append(exec.submit(self.lattice_estimator, self.p))
     tasks.append(exec.submit(self.primal_meet_estimator, self.p_primalMeetLWE))
     tasks.append(exec.submit(self.sparse_LWE_Estimator_dual, self.p_SparseLWEestimator))
-    tasks.append(exec.submit(self.sparse_LWE_Estimator_primal, self.p_SparseLWEestimator))
+    # tasks.append(exec.submit(self.sparse_LWE_Estimator_primal, self.p_SparseLWEestimator))
     wait(tasks)
     return [i.result() for i in tasks]
   
