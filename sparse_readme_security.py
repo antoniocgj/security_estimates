@@ -10,7 +10,7 @@ def gen_param_list_sparse_readme():
       params.append((2**int(p["log2(N)"]), int(p["HW"]), 2**int(p["log2(ctmod)"]), float(p["σ"])))
   # common options
   # {ternary=True, tfhe_like=False, threads=1} 
-  opts = (True, False, NUM_THREADS_ESTIMATORS)
+  opts = (True, False)
   return list(map(lambda x: x + opts, params))
 
 if __name__ == "__main__":

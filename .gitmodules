@@ -1,0 +1,6 @@
+[submodule "SparseLWEestimator"]
+	path = SparseLWEestimator
+	url = https://github.com/yonghaason/SparseLWE-estimator
+[submodule "estimator"]
+	path = estimator
+	url = https://github.com/malb/lattice-estimator

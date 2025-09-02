@@ -1,4 +1,4 @@
-import pickle, sys, datetime
+import pickle, sys, datetime, csv
 from math import log2
 
 TFHE_STYLE = False
@@ -18,51 +18,72 @@ def fmt_time(x):
          ("%.1fs" % (x%60))
          
 
-sec = ['dual_hybrid', 'dual', 'bdd_mitm_hybrid', 'bdd_hybrid', 'bdd', 'usvp', 'bkw', 'mitm_simple',  'dual_hybrid_Alb17', 'CHHS19_mitm']
-others = ["primal_meet", "sparse_dual"]
-if(TFHE_STYLE): print("N", "hw", "q", "ternary", sep="\t", end="\t")
-else: print("N", "hw", "q", "sigma", sep="\t", end="\t")
-sec_times = sum(map(lambda x: [x, x + '_time'], sec), start=[])
-others_times = sum(map(lambda x: [x, x + '_time'], others), start=[])
-if(PRINT_TIME):
-  print(*sec_times, sep="\t", end="\t")
-  print(*others_times, sep="\t", end="\t")
-else:
-  print(*sec, sep="\t", end="\t")
-  print(*others, sep="\t", end="\t")
-print("time", "cpu time", "mem", sep="\t")
+def load_data(fd):
+  data = {}
+  while True:
+    try:
+      p = pickle.load(fd)
+    except EOFError:
+      break
+    tool = p["tool"]
+    if tool not in data:
+      data[tool] = {"attacks": [], "results": []}
+    if p["result"]["attack"] not in data[tool]["attacks"]:
+      data[tool]["attacks"].append(p["result"]["attack"])
+    ## treat other estimators
+    if(tool == "primal-meet-estimator" and p["result"]["estimate"] != "fail"):
+      p["result"]["estimate"]["rop"] = 2**(float(p["result"]["estimate"]["cost"]))
+    data[tool]["results"].append(p["result"])
+  return data
+
+from collections import OrderedDict
+def gen_estimator_table(data, all_columns):
+  table = {} 
+  errors = []
+  for res in data["results"]:
+    parameters = res["parameters"]
+    resources = res["resources"]
+    attack = res["attack"]
+    exec_time = res["exec_time"]
+    estimate = res["estimate"]
+    if(parameters not in table):
+      table[parameters] = OrderedDict()
+      table[parameters]["N"] = int(log2(parameters[0]))
+      table[parameters]["hw"] = parameters[1]
+      table[parameters]["q"] = int(log2(parameters[2]))
+      table[parameters]["sigma"] = parameters[3]
+    table[parameters][attack + "_sec"] = log2((estimate["rop"])) if estimate != "fail" else ""
+    table[parameters][attack + "_time"] = fmt_time(exec_time)
+    table[parameters][attack + "_umem"] = sizeof_fmt(resources.ru_maxrss*1024)
+    if(estimate == "fail"):
+      errors.append("Lattice Estimator failed with parameters (N,hw,q,sigma) = %s when estimating attack %s. Exception: %s\n\n" %(parameters, attack, res["exception"]))
+  for t in table:
+    table[t].update(all_columns)
+  return table, errors
+  
+
 f = open(sys.argv[1], "rb")
-while True:
-  try:
-    p = pickle.load(f)
-  except EOFError:
-    break
-  params = p["params"] 
-  if(TFHE_STYLE): print(int((params[0])), params[1], int((params[2])), params[4], sep="\t", end="\t")
-  else: print(int(log2(params[0])), params[1], int(log2(params[2])), params[3], sep="\t", end="\t")
-  for est in p["est"]:
-    if(est["tool"] == "lattice-estimator"): 
-      result = est["result"]
-      for atk in sec:
-        if(type(result) is dict and atk in result):
-          if(PRINT_TIME): print("%.2f\t%s" %(log2(result[atk]["rop"]), fmt_time(result[atk]["exec_time"])), end="\t")
-          else: print("%.2f" %(log2(result[atk]["rop"])), end="\t")
-        else:
-          if(PRINT_TIME): print("-\t-", end="\t")
-          else: print("-", end="\t")
-    elif(est["tool"] == "primal-meet-estimator"):
-      result = est["result"]
-      if(result["estimate"] != "fail"):
-        print("%.2f\t%s" % (result["estimate"]["cost"], fmt_time(result["exec_time"])), end="\t")
-      else:
-        print("-\t%s" % fmt_time(result["exec_time"]), end="\t")
-    elif(est["tool"] == "sparse-lwe-estimator"):
-      result = est["result"]
-      if(result["estimate"] != "fail"):
-        security = log2(int(result["estimate"]["rop"]))
-        print("%.2f\t%s" % (security, fmt_time(result["exec_time"])), end="\t")
-      else:
-        print("-\t%s" % fmt_time(result["exec_time"]), end="\t")
-  # resources
-  res = p["resources"]
-  print("%s\t%s\t%s" % (fmt_time(res["wall-time"]), fmt_time(res["all"].ru_utime), sizeof_fmt(res["all"].ru_maxrss*1024)))
+env = pickle.load(f)
+print(env)
+all_columns = {"machine" : env["machine"],
+               "Main Repo" : env["commit"],
+               "SparseLWEestimator": env["submodules"][0],
+               "Lattice Estimator": env["submodules"][1]}
+data = load_data(f)
+all_errors = []
+for tool in data:
+  table, errors = gen_estimator_table(data[tool], all_columns)
+  all_errors += errors
+  header = list((list(table.values())[0]).keys())
+  header = header[:4] + sorted(header[4:-3]) + header[-3:]
+  print(header)
+  fout = open("out/" + tool + ".csv", "w")
+  output = csv.DictWriter(fout, header)
+  output.writeheader()
+  for param in table:
+    output.writerow(table[param])
+  fout.close()
+
+fout = open("out/errors.txt", "w")
+fout.write("".join(all_errors))
+fout.close()
