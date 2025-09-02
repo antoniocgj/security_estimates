@@ -75,7 +75,7 @@ for tool in data:
   table, errors = gen_estimator_table(data[tool], all_columns)
   all_errors += errors
   header = list((list(table.values())[0]).keys())
-  header = header[:4] + sorted(header[4:-3]) + header[-3:]
+  header = header[:4] + sorted(header[4:-4]) + header[-4:]
   print(header)
   fout = open("out/" + tool + ".csv", "w")
   output = csv.DictWriter(fout, header)
